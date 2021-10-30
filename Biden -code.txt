@@ -1,0 +1,68 @@
+library(twitteR)
+library(ROAuth)
+library(plyr)
+library(stringr)
+library(ggplot2)
+library(RCurl)
+library(RColorBrewer)
+require('ROAuth')
+require('RCurl')
+library(syuzhet)
+library(tm)
+library(tmap)
+
+requestURL <- "https://api.twitter.com/0auth/request_token"
+accessURL = "https://api.twitter.com/0auth/access_token"
+authURL = "https://api.twitter.com/0auth/authorize"
+
+consumerKey = "JQECH17A2ds6yRPXB3eG2VqBX"
+consumerSecret = "9laFAxNgMjzJTNawIi7nvTGueUy9kKhjkWKXqjeOInIgTyMbA7"
+accessToken<- "1437806033355755528-x9Z8bIy8BTpIstiNW6Gn6vGxOqMRsn"
+accessTokenSecret <- "320Sp9Yy0IjwQjGoWvv9hUAdh3AbymdTXdkVveVgMHOyG"
+
+setup_twitter_oauth(consumerKey ,consumerSecret, accessToken,  accessTokenSecret )
+
+cred <- OAuthFactory$new(consumerKey= consumerKey,
+                         consumerSecret=consumerSecret,
+                         requestURL=requestURL,
+                         accessURL=accessURL,
+                         authURL=authURL)
+
+tweet_biden <- searchTwitter('#JoeBiden',n=500,lang = "en",since = "2020-09-14",until = "2021-09-14" )
+tweet_d = twListToDF(tweet_biden)
+write.csv(tweet_d,file = "C:/Users/aswin/Desktop/biden.csv",row.names = F)
+
+
+tweet_text1 <- tweet_d$text
+View(tweet_text1)
+
+#Data Wrangling:
+tweet_text1 <- tolower(tweet_text1)
+tweet_text1 <- gsub("rt","",tweet_text1)
+tweet_text1 <- gsub("@\\w+","",tweet_text1)
+tweet_text1 <- gsub("[[:punct:]]","",tweet_text1)
+tweet_text1 <- gsub("http\\w+","",tweet_text1)
+tweet_text1 <- gsub("[|\t]{2,}","",tweet_text1)
+
+tweet_text1 <- gsub("^","",tweet_text1)
+tweet_text1 <- gsub("$","",tweet_text1)
+
+#corpus creation:
+corp2 <- Corpus(VectorSource(tweet_text1))
+tweet_d.text.corpus <- tm_map(corp2,function(x)removeWords(x,stopwords()))
+
+library(wordcloud)
+wordcloud(tweet_d.text.corpus,min.freq = 10,colors=brewer.pal(8,"Dark2"),random.color=TRUE,max.words = 1000)
+
+
+#Sentiment Anlysis:
+
+mysentiment_biden <- get_nrc_sentiment((tweet_text1))
+sentimentscores_biden <- data.frame(colSums(mysentiment_biden[,]))
+
+names(sentimentscores_biden) <- "Score"
+sentimentscores_biden <- cbind("sentiment"= rownames(sentimentscores_biden),sentimentscores_biden)
+rownames(sentimentscores_biden) <- NULL
+
+ggplot(data = sentimentscores_biden,aes(x=sentiment,y=Score)) +geom_bar(aes(fill=sentiment),stat="identity")+
+  theme(legend.position = "none")+xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets of Joe Biden")

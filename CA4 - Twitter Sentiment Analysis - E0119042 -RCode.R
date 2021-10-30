@@ -1,0 +1,175 @@
+#Libraries Required:
+
+library(twitteR)
+library(ROAuth)
+library(plyr)
+library(stringr)
+library(ggplot2)
+library(RCurl)
+library(RColorBrewer)
+require('ROAuth')
+require('RCurl')
+library(syuzhet)
+library(tm)
+library(tmap)
+
+requestURL <- "https://api.twitter.com/0auth/request_token"
+accessURL = "https://api.twitter.com/0auth/access_token"
+authURL = "https://api.twitter.com/0auth/authorize"
+
+consumerKey = "JQECH17A2ds6yRPXB3eG2VqBX"
+consumerSecret = "9laFAxNgMjzJTNawIi7nvTGueUy9kKhjkWKXqjeOInIgTyMbA7"
+accessToken<- "1437806033355755528-x9Z8bIy8BTpIstiNW6Gn6vGxOqMRsn"
+accessTokenSecret <- "320Sp9Yy0IjwQjGoWvv9hUAdh3AbymdTXdkVveVgMHOyG"
+
+setup_twitter_oauth(consumerKey ,consumerSecret, accessToken,  accessTokenSecret )
+
+cred <- OAuthFactory$new(consumerKey= consumerKey,
+                         consumerSecret=consumerSecret,
+                         requestURL=requestURL,
+                         accessURL=accessURL,
+                         authURL=authURL)
+#---------------------------------------------------------------------------------------------------------------
+tweet_trump <- searchTwitter('#DonaldTrump',n=500,lang = "en",since = "2020-09-14",until = "2021-09-14" )
+tweet_c = twListToDF(tweet_trump)
+write.csv(tweet_c,file = "C:/Users/aswin/Desktop/trump.csv",row.names = F)
+
+
+tweet_text <- tweet_c$text
+View(tweet_text)
+
+tweet_text <- tolower(tweet_text)
+tweet_text <- gsub("rt","",tweet_text)
+tweet_text <- gsub("@\\w+","",tweet_text)
+tweet_text <- gsub("[[:punct:]]","",tweet_text)
+tweet_text <- gsub("http\\w+","",tweet_text)
+tweet_text <- gsub("[|\t]{2,}","",tweet_text)
+
+tweet_text <- gsub("^","",tweet_text)
+tweet_text <- gsub("$","",tweet_text)
+
+
+corp1 <- Corpus(VectorSource(tweet_text))
+tweet_c.text.corpus <- tm_map(corp1,function(x)removeWords(x,stopwords()))
+#----------------------------------------------------------------------------------------------------------------------
+library(wordcloud)
+
+wordcloud(tweet_c.text.corpus,min.freq = 10,colors=brewer.pal(8,"Dark2"),random.color=TRUE,max.words = 1000)
+
+#--------------------------------------------------------------------------------------------------------------
+
+#Sentiment Anlysis:
+
+mysentiment_trump <- get_nrc_sentiment((tweet_text))
+sentimentscores_trump <- data.frame(colSums(mysentiment_trump[,]))
+
+names(sentimentscores_trump) <- "Score"
+sentimentscores_trump <- cbind("sentiment"= rownames(sentimentscores_trump),sentimentscores_trump)
+rownames(sentimentscores_trump) <- NULL
+
+ggplot(data = sentimentscores_trump,aes(x=sentiment,y=Score)) +geom_bar(aes(fill=sentiment),stat="identity")+
+  theme(legend.position = "none")+xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets of Donald trump")
+#--------------------------------------------------------------------------------------------------------------
+#Document Term Matrix (DTM)
+ndocs <- length(corp1)
+ndocs
+
+minTermFreq <- ndocs * 0.01 #extremely rare words i.e. terms that appear in less then 1% of the documents
+maxTermFreq <- ndocs * .5 #ignore overly common words i.e. terms that appear in more than 50% of the documents
+
+dtm = DocumentTermMatrix(corp1,
+                         control = list(
+                           stopwords = TRUE, 
+                           wordLengths=c(4, 15),
+                           removePunctuation = T,
+                           removeNumbers = T,
+                           #stemming = T,
+                           bounds = list(global = c(minTermFreq, maxTermFreq))
+                         ))
+dtm
+
+#TF-IDF:
+dtm.matrix = as.matrix(dtm)
+wordcloud(colnames(dtm.matrix), dtm.matrix[3, ], max.words = 50)
+
+#Distance :
+m  <- as.matrix(dtm)
+distMatrix <- dist(m, method="euclidean")
+
+#Heirarchial Clustering:
+groups <- hclust(distMatrix,method="ward.D")
+plot(groups, cex=0.9, hang=-1)
+rect.hclust(groups, k=5)
+
+#-----------------------------------------------------------------------------------
+
+#Importing tweets based on the hashtag:
+tweet_biden <- searchTwitter('#JoeBiden', n=500 ,lang = "en",since = "2020-09-14",until = "2021-09-14" )
+tweet_d = twListToDF(tweet_biden)
+write.csv(tweet_d,file = "C:/Users/aswin/Desktop/biden.csv",row.names = F)
+
+
+tweet_text1 <- tweet_d$text
+View(tweet_text1)
+
+#Data Wrangling:
+tweet_text1 <- tolower(tweet_text1)
+tweet_text1 <- gsub("rt","",tweet_text1)
+tweet_text1 <- gsub("@\\w+","",tweet_text1)
+tweet_text1 <- gsub("[[:punct:]]","",tweet_text1)
+tweet_text1 <- gsub("http\\w+","",tweet_text1)
+tweet_text1 <- gsub("[|\t]{2,}","",tweet_text1)
+
+tweet_text1 <- gsub("^","",tweet_text1)
+tweet_text1 <- gsub("$","",tweet_text1)
+
+#corpus creation:
+corp2 <- Corpus(VectorSource(tweet_text1))
+tweet_d.text.corpus <- tm_map(corp2,function(x)removeWords(x,stopwords()))
+
+wordcloud(tweet_d.text.corpus,min.freq = 10,colors=brewer.pal(8,"Dark2"),random.color=TRUE,max.words = 1000)
+
+
+#Sentiment Anlysis:
+
+mysentiment_biden <- get_nrc_sentiment((tweet_text1))
+sentimentscores_biden <- data.frame(colSums(mysentiment_biden[,]))
+
+names(sentimentscores_biden) <- "Score"
+sentimentscores_biden <- cbind("sentiment"= rownames(sentimentscores_biden),sentimentscores_biden)
+rownames(sentimentscores_biden) <- NULL
+
+ggplot(data = sentimentscores_biden,aes(x=sentiment,y=Score)) +geom_bar(aes(fill=sentiment),stat="identity")+
+  theme(legend.position = "none")+xlab("Sentiments")+ylab("scores")+ggtitle("Sentiments of people behind the tweets of Joe Biden")
+
+
+#Document Term Matrix (DTM)
+ndocs <- length(corp1)
+ndocs
+
+minTermFreq <- ndocs * 0.01 #extremely rare words i.e. terms that appear in less then 1% of the documents
+maxTermFreq <- ndocs * .5 #ignore overly common words i.e. terms that appear in more than 50% of the documents
+
+dtm = DocumentTermMatrix(corp1,
+                         control = list(
+                           stopwords = TRUE, 
+                           wordLengths=c(4, 15),
+                           removePunctuation = T,
+                           removeNumbers = T,
+                           #stemming = T,
+                           bounds = list(global = c(minTermFreq, maxTermFreq))
+                         ))
+dtm
+
+#TF-IDF:
+dtm.matrix = as.matrix(dtm)
+wordcloud(colnames(dtm.matrix), dtm.matrix[3, ], max.words = 50)
+
+#Euclidean Distance :
+m  <- as.matrix(dtm)
+distMatrix <- dist(m, method="euclidean")
+
+#Heirarchial Clustering:
+groups <- hclust(distMatrix,method="ward.D")
+plot(groups, cex=0.9, hang=-1)
+rect.hclust(groups, k=5)
